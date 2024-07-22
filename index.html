@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Push Leads with CSV</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/libphonenumber-js/1.9.18/libphonenumber-js.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #f0f2f5;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+        }
+
+        .container {
+            background-color: #ffffff;
+            padding: 40px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+
+        input[type="file"],
+        input[type="text"] {
+            padding: 12px 20px;
+            margin: 10px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            width: 100%;
+            font-size: 16px;
+            box-sizing: border-box;
+            transition: border-color 0.3s ease;
+        }
+
+        input[type="file"]:focus,
+        input[type="text"]:focus {
+            border-color: #007bff;
+            outline: none;
+        }
+
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+            width: 100%;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #0056b3;
+        }
+
+        button:active {
+            background-color: #004494;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Push Leads via CSV</h1>
+    <input type="file" id="fileInput">
+    <input type="text" id="authTokenInput" placeholder="Enter Auth Token">
+    <input type="text" id="apiEndpointInput" placeholder="Enter API Endpoint">
+    <button onclick="processLeads()">Push Leads</button>
+</div>
+
+<script>
+    function processLeads() {
+        const fileInput = document.getElementById('fileInput').files[0];
+        const authToken = document.getElementById('authTokenInput').value.trim();
+        const apiEndpoint = document.getElementById('apiEndpointInput').value.trim();
+
+        if (!fileInput) {
+            alert('Please select a CSV file.');
+            return;
+        }
+
+        if (!authToken) {
+            alert('Please enter the auth token.');
+            return;
+        }
+
+        if (!apiEndpoint) {
+            alert('Please enter the API endpoint.');
+            return;
+        }
+
+        Papa.parse(fileInput, {
+            header: true,
+            complete: function(results) {
+                const leads = results.data;
+                leads.forEach(lead => {
+                    try {
+                        const ip = lead['Lead IP'] ? lead['Lead IP'].trim() : '';
+                        const phone = lead['phone'];
+                        const password = lead['password'];
+                        const firstname = lead['firstname'];
+                        const lastname = lead['lastname'];
+                        const email = lead['email'];
+
+                        if (!ip) {
+                            console.warn('IP address is missing for lead:', lead);
+                            return; // Skip this lead and continue with the next one
+                        }
+
+                        if (typeof phone !== 'string' || phone.trim() === '') {
+                            console.warn('Invalid phone number for lead:', lead);
+                            return; // Skip this lead and continue with the next one
+                        }
+
+                        const parsedPhoneNumber = libphonenumber.parsePhoneNumber(phone);
+                        const country = parsedPhoneNumber.country;
+
+                        postLead(ip, country, password, phone, firstname, lastname, email, authToken, apiEndpoint);
+                    } catch (error) {
+                        console.error('Error processing lead:', lead, error);
+                    }
+                });
+            },
+            error: function(error) {
+                console.error('Error parsing CSV:', error);
+            }
+        });
+    }
+
+    function postLead(ip, countryCode, password, phone, firstname, lastname, email, authToken, apiEndpoint, offerId = "1", affiliateId = "2") {
+        const payload = {
+            ip: ip,
+            country_code: countryCode,
+            password: password,
+            phone: phone,
+            first_name: firstname,
+            last_name: lastname,
+            email: email,
+            offer_id: offerId,
+            affiliate_id: affiliateId
+        };
+
+        const headers = {
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+            "Authorization": authToken
+        };
+
+        fetch(apiEndpoint, {
+            method: 'POST',
+            headers: headers,
+            body: JSON.stringify(payload)
+        })
+        .then(response => {
+            if (!response.ok) {
+                return response.text().then(text => { throw new Error(`Error: ${response.status} / Response: ${text}`); });
+            }
+            return response.json();
+        })
+        .then(data => {
+            console.log('Lead posted successfully:', data);
+        })
+        .catch(error => {
+            console.error('Something off, please check:', error);
+        });
+    }
+</script>
+
+</body>
+</html>
